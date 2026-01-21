@@ -235,7 +235,7 @@
     helpIcon.image = [[UIImage systemImageNamed:@"questionmark.circle.fill"] imageWithTintColor:accentColor];
     helpIcon.bounds = CGRectMake(0, -3, 18, 18);
     [helpText appendAttributedString:[NSAttributedString attributedStringWithAttachment:helpIcon]];
-    [helpText appendAttributedString:[[NSAttributedString alloc] initWithString:@"  How to get API Key?" attributes:@{NSForegroundColorAttributeName: accentColor, NSFontAttributeName: [UIFont systemFontOfSize:17]}]];
+    [helpText appendAttributedString:[[NSAttributedString alloc] initWithString:@"  How to Get API Key" attributes:@{NSForegroundColorAttributeName: accentColor, NSFontAttributeName: [UIFont systemFontOfSize:17]}]];
     
     [self.helpButton setAttributedTitle:helpText forState:UIControlStateNormal];
     self.helpButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
@@ -428,10 +428,26 @@
 }
 
 - (void)helpButtonTapped {
-    NSURL *url = [NSURL URLWithString:@"https://dash.cloudflare.com/profile/api-tokens"];
-    if ([[UIApplication sharedApplication] canOpenURL:url]) {
-        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
-    }
+    NSString *linkURL = @"https://dash.cloudflare.com/profile/api-tokens";
+    NSString *message = [NSString stringWithFormat:@"1. Open %@\n\n2. Navigate to:\n   API Keys > Global API Key > View", linkURL];
+    
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"How to Get API Key"
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"Open Cloudflare" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction * _Nonnull action) {
+        NSURL *url = [NSURL URLWithString:linkURL];
+        if (!url) { return; }
+        if ([[UIApplication sharedApplication] canOpenURL:url]) {
+            [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        } else {
+            [weakSelf showAlertWithTitle:@"Error" message:@"Unable to open the link on this device."];
+        }
+    }]];
+    
+    [alert addAction:[UIAlertAction actionWithTitle:@"Close" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)showAlertWithTitle:(NSString *)title message:(NSString *)message {
