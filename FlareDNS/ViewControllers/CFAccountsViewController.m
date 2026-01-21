@@ -544,11 +544,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
 
 - (BOOL)textView:(UITextView *)textView shouldInteractWithURL:(NSURL *)URL inRange:(NSRange)characterRange interaction:(UITextItemInteraction)interaction {
     // Open URL in Safari
-    if (@available(iOS 10.0, *)) {
-        [[UIApplication sharedApplication] openURL:URL options:@{} completionHandler:nil];
-    } else {
-        [[UIApplication sharedApplication] openURL:URL];
-    }
+    [[UIApplication sharedApplication] openURL:URL options:@{} completionHandler:nil];
     return NO; // Don't use default behavior
 }
 
