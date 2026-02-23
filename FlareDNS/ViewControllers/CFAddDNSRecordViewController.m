@@ -231,8 +231,39 @@
         // Suggestions section
         NSDictionary *suggestion = self.suggestions[indexPath.row];
         cell.textLabel.text = suggestion[@"content"];
-        NSInteger count = [suggestion[@"count"] integerValue];
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"used %ldx", (long)count];
+        cell.detailTextLabel.text = nil;
+
+        // Styled percentage badge
+        CGFloat percentage = [suggestion[@"percentage"] doubleValue];
+        NSString *percentText = [NSString stringWithFormat:@"%.0f%%", percentage];
+
+        UILabel *badgeLabel = [[UILabel alloc] init];
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        badgeLabel.text = percentText;
+        badgeLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightMedium];
+        badgeLabel.textAlignment = NSTextAlignmentCenter;
+
+        if (@available(iOS 26.0, *)) {
+            badgeLabel.textColor = [UIColor secondaryLabelColor];
+            badgeLabel.backgroundColor = [UIColor tertiarySystemFillColor];
+        } else {
+            badgeLabel.textColor = [UIColor cf_secondaryTextColor];
+            badgeLabel.backgroundColor = [UIColor colorWithWhite:0.5 alpha:0.12];
+        }
+        badgeLabel.layer.cornerRadius = 4;
+        badgeLabel.clipsToBounds = YES;
+
+        // Intrinsic content size + padding
+        badgeLabel.layer.sublayerTransform = CATransform3DIdentity;
+        [cell.contentView addSubview:badgeLabel];
+
+        [NSLayoutConstraint activateConstraints:@[
+            [badgeLabel.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor],
+            [badgeLabel.trailingAnchor constraintEqualToAnchor:cell.contentView.trailingAnchor constant:-16],
+            [badgeLabel.widthAnchor constraintGreaterThanOrEqualToConstant:36],
+            [badgeLabel.heightAnchor constraintEqualToConstant:22]
+        ]];
+
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
         return cell;
     }
@@ -555,8 +586,8 @@
 #pragma mark - Suggestions
 
 - (void)rebuildSuggestions {
-    // Only show suggestions for A and CNAME record types
-    if (self.recordType != CFDNSRecordTypeA && self.recordType != CFDNSRecordTypeCNAME) {
+    // Only show suggestions for A, AAAA, and CNAME record types
+    if (self.recordType != CFDNSRecordTypeA && self.recordType != CFDNSRecordTypeAAAA && self.recordType != CFDNSRecordTypeCNAME) {
         self.suggestions = @[];
         return;
     }
@@ -574,17 +605,25 @@
         return;
     }
 
-    // Build array of {content, count} dictionaries sorted by count descending
+    // Calculate total count for percentage
+    NSUInteger totalCount = 0;
+    for (NSString *content in contentCounts) {
+        totalCount += [contentCounts countForObject:content];
+    }
+
+    // Build array of {content, percentage} dictionaries sorted by percentage descending
     NSMutableArray<NSDictionary *> *results = [NSMutableArray array];
     for (NSString *content in contentCounts) {
+        NSUInteger count = [contentCounts countForObject:content];
+        CGFloat percentage = (totalCount > 0) ? (count * 100.0 / totalCount) : 0;
         [results addObject:@{
             @"content": content,
-            @"count": @([contentCounts countForObject:content])
+            @"percentage": @(percentage)
         }];
     }
 
     [results sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
-        return [b[@"count"] compare:a[@"count"]];
+        return [b[@"percentage"] compare:a[@"percentage"]];
     }];
 
     self.suggestions = [results copy];
