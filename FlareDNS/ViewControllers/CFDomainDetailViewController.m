@@ -120,13 +120,29 @@
         dispatch_group_leave(group);
     }];
 
+    // Load cached auto-fetched dates for immediate display
+    NSString *cacheKey = [NSString stringWithFormat:@"domainCachedDates_%@", self.zone.name];
+    NSDictionary *cachedDates = [[NSUserDefaults standardUserDefaults] dictionaryForKey:cacheKey];
+    if (cachedDates[@"registeredAt"] && cachedDates[@"expiresAt"]) {
+        self.registeredAt = cachedDates[@"registeredAt"];
+        self.expiresAt = cachedDates[@"expiresAt"];
+    }
+
     dispatch_group_enter(group);
     [[CFDomainExpiryService shared] fetchExpiryForDomain:self.zone.name completion:^(NSString * _Nullable registeredAt, NSString * _Nullable expiresAt, NSError * _Nullable error) {
         if (!error && registeredAt && expiresAt) {
             self.registeredAt = registeredAt;
             self.expiresAt = expiresAt;
+            // Cache the fetched dates, update if different
+            NSDictionary *cached = [[NSUserDefaults standardUserDefaults] dictionaryForKey:cacheKey];
+            if (![cached[@"registeredAt"] isEqualToString:registeredAt] || ![cached[@"expiresAt"] isEqualToString:expiresAt]) {
+                [[NSUserDefaults standardUserDefaults] setObject:@{@"registeredAt": registeredAt, @"expiresAt": expiresAt} forKey:cacheKey];
+            }
         } else {
-            self.domainExpiryError = YES;
+            // Only mark error if we have no data at all
+            if (!self.registeredAt || !self.expiresAt) {
+                self.domainExpiryError = YES;
+            }
         }
         self.domainExpiryLoaded = YES;
         dispatch_group_leave(group);
@@ -412,8 +428,8 @@
         return cell;
     }
 
-    if (self.domainExpiryError || !self.registeredAt || !self.expiresAt) {
-        cell.textLabel.text = @"Registration info unavailable";
+    if (!self.registeredAt || !self.expiresAt) {
+        cell.textLabel.text = @"Unsupported";
         cell.textLabel.textColor = [UIColor secondaryLabelColor];
         return cell;
     }
@@ -435,8 +451,10 @@
     }
 
     if (!regDate || !expDate) {
-        cell.textLabel.text = @"Registration info unavailable";
+        cell.textLabel.text = @"Unsupported";
         cell.textLabel.textColor = [UIColor secondaryLabelColor];
+        self.registeredAt = nil;
+        self.expiresAt = nil;
         return cell;
     }
 
@@ -534,6 +552,31 @@
     [trackView addSubview:fillView];
     [container addSubview:trackView];
 
+    // Percentage and remaining days labels
+    NSInteger percentUsed = (NSInteger)(progress * 100);
+    NSTimeInterval remainingInterval = [expDate timeIntervalSinceDate:[NSDate date]];
+    NSInteger remainingDays = (NSInteger)(remainingInterval / 86400);
+
+    UILabel *percentLabel = [[UILabel alloc] init];
+    percentLabel.text = [NSString stringWithFormat:@"%ld%%", (long)percentUsed];
+    percentLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+    percentLabel.textColor = progressColor;
+    percentLabel.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UILabel *remainingLabel = [[UILabel alloc] init];
+    if (remainingDays > 0) {
+        remainingLabel.text = [NSString stringWithFormat:@"%ld days remaining", (long)remainingDays];
+    } else {
+        remainingLabel.text = @"Expired";
+    }
+    remainingLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
+    remainingLabel.textColor = [UIColor secondaryLabelColor];
+    remainingLabel.textAlignment = NSTextAlignmentRight;
+    remainingLabel.translatesAutoresizingMaskIntoConstraints = NO;
+
+    [container addSubview:percentLabel];
+    [container addSubview:remainingLabel];
+
     [NSLayoutConstraint activateConstraints:@[
         // Registered title
         [regTitleLabel.topAnchor constraintEqualToAnchor:container.topAnchor],
@@ -556,14 +599,22 @@
         [trackView.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
         [trackView.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
         [trackView.heightAnchor constraintEqualToConstant:8],
-        [trackView.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
 
         // Progress bar fill
         [fillView.topAnchor constraintEqualToAnchor:trackView.topAnchor],
         [fillView.leadingAnchor constraintEqualToAnchor:trackView.leadingAnchor],
         [fillView.bottomAnchor constraintEqualToAnchor:trackView.bottomAnchor],
-        [fillView.widthAnchor constraintEqualToAnchor:trackView.widthAnchor multiplier:progress]
+        [fillView.widthAnchor constraintEqualToAnchor:trackView.widthAnchor multiplier:progress],
+
+        // Percentage label (left, below progress bar)
+        [percentLabel.topAnchor constraintEqualToAnchor:trackView.bottomAnchor constant:6],
+        [percentLabel.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+
+        // Remaining days label (right, below progress bar)
+        [remainingLabel.topAnchor constraintEqualToAnchor:trackView.bottomAnchor constant:6],
+        [remainingLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
     ]];
+    [percentLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor].active = YES;
 
     return cell;
 }

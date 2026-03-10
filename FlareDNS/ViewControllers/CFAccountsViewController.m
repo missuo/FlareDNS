@@ -517,12 +517,12 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
             [self deleteAccount:account];
             completionHandler(YES);
         }];
-        
+
         deleteAction.backgroundColor = [UIColor cf_redColor];
-        
+
         return [UISwipeActionsConfiguration configurationWithActions:@[deleteAction]];
     }
-    
+
     return nil;
 }
 
