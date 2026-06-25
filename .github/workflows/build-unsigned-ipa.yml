@@ -1,0 +1,123 @@
+name: Build unsigned IPA
+
+# Builds an unsigned IPA on every code change pushed to main and publishes it
+# as the rolling "unsigned-latest" release. Documentation-only changes
+# (Markdown, license, screenshots, funding config) do not trigger a build.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'ScreenShots/**'
+      - '.github/FUNDING.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Build and package unsigned IPA
+        run: |
+          set -e
+          mkdir -p "$PWD/build/diagnostics" "$PWD/build/ipa"
+
+          COMMON_ARGS=(
+            -project FlareDNS.xcodeproj
+            -scheme FlareDNS
+            -configuration Release
+            -sdk iphoneos
+            -destination 'generic/platform=iOS'
+            -derivedDataPath "$PWD/build/DerivedData"
+            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGN_IDENTITY=
+            DEVELOPMENT_TEAM=
+          )
+
+          xcodebuild "${COMMON_ARGS[@]}" build
+
+          xcodebuild "${COMMON_ARGS[@]}" -showBuildSettings > "$PWD/build/diagnostics/build-settings.txt"
+          TARGET_BUILD_DIR=$(awk -F' = ' '/ TARGET_BUILD_DIR = / { value=$2 } END { print value }' "$PWD/build/diagnostics/build-settings.txt")
+          WRAPPER_NAME=$(awk -F' = ' '/ WRAPPER_NAME = / { value=$2 } END { print value }' "$PWD/build/diagnostics/build-settings.txt")
+          APP_PATH="$TARGET_BUILD_DIR/$WRAPPER_NAME"
+
+          echo "TARGET_BUILD_DIR=$TARGET_BUILD_DIR"
+          echo "WRAPPER_NAME=$WRAPPER_NAME"
+          echo "APP_PATH=$APP_PATH"
+          find "$PWD/build" -maxdepth 8 -type d -name '*.app' -print > "$PWD/build/diagnostics/app-bundles.txt" || true
+
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH=$(sed -n '1p' "$PWD/build/diagnostics/app-bundles.txt")
+          fi
+
+          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+            echo "No .app bundle found. Known app bundles:"
+            cat "$PWD/build/diagnostics/app-bundles.txt"
+            exit 1
+          fi
+
+          echo "Packaging $APP_PATH"
+          rm -rf "$PWD/build/Payload"
+          mkdir -p "$PWD/build/Payload"
+          cp -R "$APP_PATH" "$PWD/build/Payload/"
+          ditto -c -k --sequesterRsrc --keepParent "$PWD/build/Payload" "$PWD/build/ipa/FlareDNS-unsigned.ipa"
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlareDNS-unsigned-ipa
+          path: build/ipa/FlareDNS-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Publish unsigned IPA release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="unsigned-latest"
+          IPA_PATH="$PWD/build/ipa/FlareDNS-unsigned.ipa"
+          SHORT_SHA=$(git rev-parse --short "$GITHUB_SHA")
+
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push --force origin "refs/tags/$TAG"
+          gh release create "$TAG" \
+            "$IPA_PATH#FlareDNS-unsigned.ipa" \
+            --title "Latest unsigned IPA" \
+            --notes "Unsigned IPA for sideloading (TrollStore / etc.), built from \`${SHORT_SHA}\`. Download the .ipa asset directly; do not rename the Actions artifact zip." \
+            --latest
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlareDNS-build-diagnostics
+          path: build/diagnostics
+          if-no-files-found: ignore
