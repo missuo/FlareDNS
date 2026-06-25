@@ -391,6 +391,80 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
     }];
 }
 
+- (void)purgeCacheForZoneID:(NSString *)zoneID files:(NSArray<NSString *> *)files completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/purge_cache", zoneID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"POST"];
+    NSDictionary *body = @{@"files": files};
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        completion(error == nil, error);
+    }];
+}
+
+- (void)fetchZoneSetting:(NSString *)setting forZoneID:(NSString *)zoneID completion:(void (^)(id _Nullable value, NSError * _Nullable error))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/settings/%@", zoneID, setting];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+        completion([result isKindOfClass:[NSDictionary class]] ? result[@"value"] : nil, nil);
+    }];
+}
+
+- (void)setZoneSetting:(NSString *)setting value:(id)value forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/settings/%@", zoneID, setting];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"PATCH"];
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"value": value} options:0 error:nil];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        completion(error == nil, error);
+    }];
+}
+
+- (void)fetchBrotliForZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self fetchZoneSetting:@"brotli" forZoneID:zoneID completion:^(id value, NSError *error) {
+        completion([value isKindOfClass:[NSString class]] && [value isEqualToString:@"on"], error);
+    }];
+}
+
+- (void)setBrotli:(BOOL)enabled forZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self setZoneSetting:@"brotli" value:(enabled ? @"on" : @"off") forZoneID:zoneID completion:completion];
+}
+
+- (void)fetchAlwaysOnlineForZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self fetchZoneSetting:@"always_online" forZoneID:zoneID completion:^(id value, NSError *error) {
+        completion([value isKindOfClass:[NSString class]] && [value isEqualToString:@"on"], error);
+    }];
+}
+
+- (void)setAlwaysOnline:(BOOL)enabled forZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self setZoneSetting:@"always_online" value:(enabled ? @"on" : @"off") forZoneID:zoneID completion:completion];
+}
+
+- (void)fetchCacheLevelForZoneID:(NSString *)zoneID completion:(void (^)(NSString * _Nullable, NSError * _Nullable))completion {
+    [self fetchZoneSetting:@"cache_level" forZoneID:zoneID completion:^(id value, NSError *error) {
+        completion([value isKindOfClass:[NSString class]] ? value : nil, error);
+    }];
+}
+
+- (void)setCacheLevel:(NSString *)value forZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self setZoneSetting:@"cache_level" value:value forZoneID:zoneID completion:completion];
+}
+
+- (void)fetchBrowserCacheTTLForZoneID:(NSString *)zoneID completion:(void (^)(NSInteger, NSError * _Nullable))completion {
+    [self fetchZoneSetting:@"browser_cache_ttl" forZoneID:zoneID completion:^(id value, NSError *error) {
+        completion([value respondsToSelector:@selector(integerValue)] ? [value integerValue] : 0, error);
+    }];
+}
+
+- (void)setBrowserCacheTTL:(NSInteger)seconds forZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    [self setZoneSetting:@"browser_cache_ttl" value:@(seconds) forZoneID:zoneID completion:completion];
+}
+
 #pragma mark - Analytics (GraphQL)
 
 - (void)fetchTrafficAnalyticsForZoneID:(NSString *)zoneID since:(NSDate *)since until:(NSDate *)until completion:(void (^)(CFTrafficData * _Nullable, NSError * _Nullable))completion {

@@ -18,6 +18,10 @@
 @property (nonatomic, assign) CFSSLMode sslMode;
 @property (nonatomic, assign) CFSecurityLevel securityLevel;
 @property (nonatomic, assign) BOOL developmentMode;
+@property (nonatomic, assign) BOOL brotliEnabled;
+@property (nonatomic, assign) BOOL alwaysOnlineEnabled;
+@property (nonatomic, copy) NSString *cacheLevel;
+@property (nonatomic, assign) NSInteger browserCacheTTL;
 @property (nonatomic, assign) BOOL isLoadingSettings;
 @property (nonatomic, assign) BOOL hasLoadedSettings;
 @property (nonatomic, copy) NSString *registeredAt;
@@ -36,6 +40,10 @@
         _sslMode = CFSSLModeFull;
         _securityLevel = CFSecurityLevelMedium;
         _developmentMode = NO;
+        _brotliEnabled = NO;
+        _alwaysOnlineEnabled = NO;
+        _cacheLevel = @"basic";
+        _browserCacheTTL = 14400;
     }
     return self;
 }
@@ -119,6 +127,38 @@
         dispatch_group_leave(group);
     }];
 
+    dispatch_group_enter(group);
+    [[CFAPIService shared] fetchBrotliForZoneID:self.zone.zoneID completion:^(BOOL enabled, NSError * _Nullable error) {
+        if (!error) {
+            self.brotliEnabled = enabled;
+        }
+        dispatch_group_leave(group);
+    }];
+
+    dispatch_group_enter(group);
+    [[CFAPIService shared] fetchAlwaysOnlineForZoneID:self.zone.zoneID completion:^(BOOL enabled, NSError * _Nullable error) {
+        if (!error) {
+            self.alwaysOnlineEnabled = enabled;
+        }
+        dispatch_group_leave(group);
+    }];
+
+    dispatch_group_enter(group);
+    [[CFAPIService shared] fetchCacheLevelForZoneID:self.zone.zoneID completion:^(NSString * _Nullable value, NSError * _Nullable error) {
+        if (!error && value.length > 0) {
+            self.cacheLevel = value;
+        }
+        dispatch_group_leave(group);
+    }];
+
+    dispatch_group_enter(group);
+    [[CFAPIService shared] fetchBrowserCacheTTLForZoneID:self.zone.zoneID completion:^(NSInteger seconds, NSError * _Nullable error) {
+        if (!error && seconds > 0) {
+            self.browserCacheTTL = seconds;
+        }
+        dispatch_group_leave(group);
+    }];
+
     // Load cached auto-fetched dates for immediate display
     NSString *cacheKey = [NSString stringWithFormat:@"domainCachedDates_%@", self.zone.name];
     NSDictionary *cachedDates = [[NSUserDefaults standardUserDefaults] dictionaryForKey:cacheKey];
@@ -177,7 +217,7 @@
 #pragma mark - UITableViewDataSource
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
-    return 6;
+    return 7;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
@@ -186,8 +226,9 @@
         case 1: return 1; // Domain Registration
         case 2: return 2; // Zone Details (DNS Records, Traffic Analytics)
         case 3: return self.zone.nameServers.count; // Nameservers
-        case 4: return 2; // Security & Performance (SSL Mode, Security Level)
-        case 5: return 2; // Cache Management (Development Mode, Purge Cache)
+        case 4: return 2; // Security (SSL Mode, Security Level)
+        case 5: return 4; // Performance (Brotli, Always Online, Cache Level, Browser TTL)
+        case 6: return 3; // Cache Management (Development Mode, Custom Purge, Purge Cache)
         default: return 0;
     }
 }
@@ -198,15 +239,16 @@
         case 1: return @"DOMAIN REGISTRATION";
         case 2: return @"ZONE DETAILS";
         case 3: return @"NAMESERVERS";
-        case 4: return @"SECURITY & PERFORMANCE";
-        case 5: return @"CACHE MANAGEMENT";
+        case 4: return @"SECURITY";
+        case 5: return @"PERFORMANCE";
+        case 6: return @"CACHE MANAGEMENT";
         default: return nil;
     }
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
-    if (section == 5) {
-        return @"Development mode bypasses cache and purge cache clears all cached resources.";
+    if (section == 6) {
+        return @"Custom purge clears specific URLs. Purge cache clears all cached resources.";
     }
     return nil;
 }
@@ -241,7 +283,10 @@
         case 4: // Security & Performance
             [self configureSecurityCell:cell atRow:indexPath.row];
             break;
-        case 5: // Cache Management
+        case 5: // Performance
+            [self configurePerformanceCell:cell atRow:indexPath.row];
+            break;
+        case 6: // Cache Management
             [self configureCacheCell:cell atRow:indexPath.row];
             break;
     }
@@ -375,6 +420,59 @@
     ]];
 }
 
+- (void)configurePerformanceCell:(UITableViewCell *)cell atRow:(NSInteger)row {
+    cell.imageView.image = [[self class] placeholderImage];
+    cell.imageView.alpha = 0;
+
+    UIImageView *customImageView = [[UIImageView alloc] init];
+    customImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    customImageView.contentMode = UIViewContentModeScaleAspectFit;
+    customImageView.tag = 999;
+
+    if (row == 0) {
+        cell.textLabel.text = @"Brotli";
+        customImageView.image = [self iconWithName:@"archivebox.fill"];
+        customImageView.tintColor = [UIColor systemTealColor];
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = self.brotliEnabled;
+        [toggle addTarget:self action:@selector(brotliSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+    } else if (row == 1) {
+        cell.textLabel.text = @"Always Online";
+        customImageView.image = [self iconWithName:@"network"];
+        customImageView.tintColor = [UIColor systemGreenColor];
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = self.alwaysOnlineEnabled;
+        [toggle addTarget:self action:@selector(alwaysOnlineSwitchChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+    } else if (row == 2) {
+        cell.textLabel.text = @"Cache Level";
+        customImageView.image = [self iconWithName:@"speedometer"];
+        customImageView.tintColor = [UIColor systemBlueColor];
+        cell.detailTextLabel.text = [self displayNameForCacheLevel:self.cacheLevel];
+        cell.detailTextLabel.textColor = [UIColor systemBlueColor];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    } else {
+        cell.textLabel.text = @"Browser Cache TTL";
+        customImageView.image = [self iconWithName:@"clock.fill"];
+        customImageView.tintColor = [UIColor systemOrangeColor];
+        cell.detailTextLabel.text = [self displayNameForBrowserCacheTTL:self.browserCacheTTL];
+        cell.detailTextLabel.textColor = [UIColor systemBlueColor];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    }
+
+    [cell.contentView addSubview:customImageView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [customImageView.leadingAnchor constraintEqualToAnchor:cell.contentView.leadingAnchor constant:16],
+        [customImageView.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor],
+        [customImageView.widthAnchor constraintEqualToConstant:28],
+        [customImageView.heightAnchor constraintEqualToConstant:28]
+    ]];
+}
+
 - (void)configureCacheCell:(UITableViewCell *)cell atRow:(NSInteger)row {
     // Use placeholder image to maintain textLabel positioning, then overlay custom imageView
     cell.imageView.image = [[self class] placeholderImage];
@@ -395,6 +493,12 @@
         devModeSwitch.onTintColor = [UIColor systemGreenColor];
         [devModeSwitch addTarget:self action:@selector(developmentModeSwitchChanged:) forControlEvents:UIControlEventValueChanged];
         cell.accessoryView = devModeSwitch;
+    } else if (row == 1) {
+        cell.textLabel.text = @"Custom Purge";
+        cell.textLabel.textColor = [UIColor systemBlueColor];
+        customImageView.image = [self iconWithName:@"link.badge.plus"];
+        customImageView.tintColor = [UIColor systemOrangeColor];
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
     } else {
         cell.textLabel.text = @"Purge Cache";
         cell.textLabel.textColor = [UIColor systemBlueColor];
@@ -661,8 +765,18 @@
         } else {
             [self showSecurityLevelPicker];
         }
-    } else if (indexPath.section == 5 && indexPath.row == 1) {
-        [self purgeCacheTapped];
+    } else if (indexPath.section == 5) {
+        if (indexPath.row == 2) {
+            [self showCacheLevelPicker];
+        } else if (indexPath.row == 3) {
+            [self showBrowserCacheTTLPicker];
+        }
+    } else if (indexPath.section == 6) {
+        if (indexPath.row == 1) {
+            [self customPurgeTapped];
+        } else if (indexPath.row == 2) {
+            [self purgeCacheTapped];
+        }
     }
 }
 
@@ -675,6 +789,28 @@
             [self showAlertWithTitle:@"Error" message:error.localizedDescription];
         } else {
             self.developmentMode = sender.on;
+        }
+    }];
+}
+
+- (void)brotliSwitchChanged:(UISwitch *)sender {
+    [[CFAPIService shared] setBrotli:sender.on forZoneID:self.zone.zoneID completion:^(BOOL success, NSError * _Nullable error) {
+        if (error) {
+            sender.on = !sender.on;
+            [self showAlertWithTitle:@"Error" message:error.localizedDescription];
+        } else {
+            self.brotliEnabled = sender.on;
+        }
+    }];
+}
+
+- (void)alwaysOnlineSwitchChanged:(UISwitch *)sender {
+    [[CFAPIService shared] setAlwaysOnline:sender.on forZoneID:self.zone.zoneID completion:^(BOOL success, NSError * _Nullable error) {
+        if (error) {
+            sender.on = !sender.on;
+            [self showAlertWithTitle:@"Error" message:error.localizedDescription];
+        } else {
+            self.alwaysOnlineEnabled = sender.on;
         }
     }];
 }
@@ -745,6 +881,135 @@
             [self.tableView reloadData];
         }
     }];
+}
+
+- (NSString *)displayNameForCacheLevel:(NSString *)value {
+    NSDictionary *names = @{
+        @"aggressive": @"Aggressive",
+        @"basic": @"Basic",
+        @"simplified": @"Simplified"
+    };
+    return names[value] ?: value ?: @"Unknown";
+}
+
+- (void)showCacheLevelPicker {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Cache Level" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSString *> *values = @[@"aggressive", @"basic", @"simplified"];
+
+    for (NSString *value in values) {
+        UIAlertAction *action = [UIAlertAction actionWithTitle:[self displayNameForCacheLevel:value] style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction * _Nonnull action) {
+            [self setCacheLevel:value];
+        }];
+        if ([value isEqualToString:self.cacheLevel]) {
+            [action setValue:[UIImage systemImageNamed:@"checkmark"] forKey:@"image"];
+        }
+        [alert addAction:action];
+    }
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)setCacheLevel:(NSString *)cacheLevel {
+    [[CFAPIService shared] setCacheLevel:cacheLevel forZoneID:self.zone.zoneID completion:^(BOOL success, NSError * _Nullable error) {
+        if (error) {
+            [self showAlertWithTitle:@"Error" message:error.localizedDescription];
+        } else {
+            self.cacheLevel = cacheLevel;
+            [self.tableView reloadData];
+        }
+    }];
+}
+
+- (NSString *)displayNameForBrowserCacheTTL:(NSInteger)seconds {
+    if (seconds <= 0) return @"Respect Existing";
+    NSDictionary<NSNumber *, NSString *> *names = @{
+        @30: @"30 seconds",
+        @60: @"1 minute",
+        @300: @"5 minutes",
+        @1200: @"20 minutes",
+        @3600: @"1 hour",
+        @14400: @"4 hours",
+        @28800: @"8 hours",
+        @43200: @"12 hours",
+        @86400: @"1 day",
+        @604800: @"1 week",
+        @2592000: @"1 month",
+        @31536000: @"1 year"
+    };
+    return names[@(seconds)] ?: [NSString stringWithFormat:@"%ld seconds", (long)seconds];
+}
+
+- (void)showBrowserCacheTTLPicker {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Browser Cache TTL" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    NSArray<NSNumber *> *values = @[@0, @1800, @3600, @7200, @14400, @28800, @43200, @86400, @604800, @2592000, @31536000];
+
+    for (NSNumber *number in values) {
+        NSInteger seconds = [number integerValue];
+        UIAlertAction *action = [UIAlertAction actionWithTitle:[self displayNameForBrowserCacheTTL:seconds] style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction * _Nonnull action) {
+            [self setBrowserCacheTTL:seconds];
+        }];
+        if (seconds == self.browserCacheTTL) {
+            [action setValue:[UIImage systemImageNamed:@"checkmark"] forKey:@"image"];
+        }
+        [alert addAction:action];
+    }
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)setBrowserCacheTTL:(NSInteger)seconds {
+    [[CFAPIService shared] setBrowserCacheTTL:seconds forZoneID:self.zone.zoneID completion:^(BOOL success, NSError * _Nullable error) {
+        if (error) {
+            [self showAlertWithTitle:@"Error" message:error.localizedDescription];
+        } else {
+            self.browserCacheTTL = seconds;
+            [self.tableView reloadData];
+        }
+    }];
+}
+
+- (void)customPurgeTapped {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Custom Purge"
+                                                                   message:@"Enter a URL to purge. Separate multiple URLs with commas."
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = [NSString stringWithFormat:@"https://%@/path", self.zone.name];
+        textField.keyboardType = UIKeyboardTypeURL;
+        textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        textField.autocorrectionType = UITextAutocorrectionTypeNo;
+    }];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Purge" style:UIAlertActionStyleDestructive handler:^(__unused UIAlertAction * _Nonnull action) {
+        NSString *raw = alert.textFields.firstObject.text ?: @"";
+        NSMutableCharacterSet *separators = [NSMutableCharacterSet newlineCharacterSet];
+        [separators addCharactersInString:@","];
+        NSArray<NSString *> *lines = [raw componentsSeparatedByCharactersInSet:separators];
+        NSMutableArray<NSString *> *files = [NSMutableArray array];
+        for (NSString *line in lines) {
+            NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (trimmed.length > 0) {
+                [files addObject:trimmed];
+            }
+        }
+
+        if (files.count == 0) {
+            [self showAlertWithTitle:@"Error" message:@"Enter at least one URL."];
+            return;
+        }
+
+        [[CFAPIService shared] purgeCacheForZoneID:self.zone.zoneID files:files completion:^(BOOL success, NSError * _Nullable error) {
+            if (error) {
+                [self showAlertWithTitle:@"Error" message:error.localizedDescription];
+            } else {
+                [self showAlertWithTitle:@"Success" message:@"Selected URLs have been purged."];
+            }
+        }];
+    }]];
+
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)purgeCacheTapped {

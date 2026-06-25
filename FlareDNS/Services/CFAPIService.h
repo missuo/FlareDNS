@@ -46,6 +46,15 @@ typedef void (^CFAPICompletionBlock)(id _Nullable result, NSError * _Nullable er
 - (void)fetchDevelopmentModeForZoneID:(NSString *)zoneID completion:(void (^)(BOOL enabled, NSError * _Nullable error))completion;
 - (void)setDevelopmentMode:(BOOL)enabled forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 - (void)purgeCacheForZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+- (void)purgeCacheForZoneID:(NSString *)zoneID files:(NSArray<NSString *> *)files completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+- (void)fetchBrotliForZoneID:(NSString *)zoneID completion:(void (^)(BOOL enabled, NSError * _Nullable error))completion;
+- (void)setBrotli:(BOOL)enabled forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+- (void)fetchAlwaysOnlineForZoneID:(NSString *)zoneID completion:(void (^)(BOOL enabled, NSError * _Nullable error))completion;
+- (void)setAlwaysOnline:(BOOL)enabled forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+- (void)fetchCacheLevelForZoneID:(NSString *)zoneID completion:(void (^)(NSString * _Nullable value, NSError * _Nullable error))completion;
+- (void)setCacheLevel:(NSString *)value forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+- (void)fetchBrowserCacheTTLForZoneID:(NSString *)zoneID completion:(void (^)(NSInteger seconds, NSError * _Nullable error))completion;
+- (void)setBrowserCacheTTL:(NSInteger)seconds forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 
 // Analytics
 - (void)fetchTrafficAnalyticsForZoneID:(NSString *)zoneID since:(NSDate *)since until:(NSDate *)until completion:(void (^)(CFTrafficData * _Nullable data, NSError * _Nullable error))completion;
