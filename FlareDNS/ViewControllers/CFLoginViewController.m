@@ -18,6 +18,10 @@
 @property (nonatomic, strong) UILabel *subtitleLabel;
 @property (nonatomic, strong) UIView *formContainerView;
 @property (nonatomic, strong) UILabel *accountDetailsLabel;
+@property (nonatomic, strong) UISegmentedControl *authModeControl;
+@property (nonatomic, strong) UIView *emailSeparator;
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *emailVisibleConstraints;
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *emailHiddenConstraints;
 @property (nonatomic, strong) UILabel *emailLabel;
 @property (nonatomic, strong) UITextField *emailTextField;
 @property (nonatomic, strong) UILabel *apiKeyLabel;
@@ -115,7 +119,14 @@
     self.formContainerView.backgroundColor = secondaryBackground;
     self.formContainerView.layer.cornerRadius = 12;
     [self.scrollView addSubview:self.formContainerView];
-    
+
+    // Auth Mode Selector
+    self.authModeControl = [[UISegmentedControl alloc] initWithItems:@[@"Global API Key", @"API Token"]];
+    self.authModeControl.translatesAutoresizingMaskIntoConstraints = NO;
+    self.authModeControl.selectedSegmentIndex = 0;
+    [self.authModeControl addTarget:self action:@selector(authModeChanged) forControlEvents:UIControlEventValueChanged];
+    [self.formContainerView addSubview:self.authModeControl];
+
     // Email Label
     self.emailLabel = [[UILabel alloc] init];
     self.emailLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -127,7 +138,7 @@
     // Email TextField
     self.emailTextField = [[UITextField alloc] init];
     self.emailTextField.translatesAutoresizingMaskIntoConstraints = NO;
-    self.emailTextField.placeholder = @"Required for Global API Key";
+    self.emailTextField.placeholder = @"Enter your email";
     self.emailTextField.font = [UIFont systemFontOfSize:17];
     self.emailTextField.textColor = primaryText;
     self.emailTextField.keyboardType = UIKeyboardTypeEmailAddress;
@@ -135,7 +146,7 @@
     self.emailTextField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.emailTextField.returnKeyType = UIReturnKeyNext;
     self.emailTextField.delegate = self;
-    self.emailTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Required for Global API Key" attributes:@{NSForegroundColorAttributeName: secondaryText}];
+    self.emailTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your email" attributes:@{NSForegroundColorAttributeName: secondaryText}];
     [self.formContainerView addSubview:self.emailTextField];
     
     // Separator
@@ -143,12 +154,13 @@
     separator.translatesAutoresizingMaskIntoConstraints = NO;
     separator.backgroundColor = [UIColor separatorColor];
     separator.tag = 100;
+    self.emailSeparator = separator;
     [self.formContainerView addSubview:separator];
     
     // API Key Label
     self.apiKeyLabel = [[UILabel alloc] init];
     self.apiKeyLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.apiKeyLabel.text = @"API Token or Global API Key";
+    self.apiKeyLabel.text = @"Global API Key";
     self.apiKeyLabel.font = [UIFont systemFontOfSize:13];
     self.apiKeyLabel.textColor = secondaryText;
     [self.formContainerView addSubview:self.apiKeyLabel];
@@ -178,7 +190,7 @@
     // API Key Hint
     self.apiKeyHintLabel = [[UILabel alloc] init];
     self.apiKeyHintLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.apiKeyHintLabel.text = @"Leave email empty when using an API Token. Credentials stay on this device.";
+    self.apiKeyHintLabel.text = @"Your Global API Key has full account access. Credentials stay on this device.";
     self.apiKeyHintLabel.font = [UIFont systemFontOfSize:13];
     self.apiKeyHintLabel.textColor = secondaryText;
     [self.formContainerView addSubview:self.apiKeyHintLabel];
@@ -295,8 +307,13 @@
         [self.formContainerView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:20],
         [self.formContainerView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-20],
         
+        // Auth Mode Selector
+        [self.authModeControl.topAnchor constraintEqualToAnchor:self.formContainerView.topAnchor constant:12],
+        [self.authModeControl.leadingAnchor constraintEqualToAnchor:self.formContainerView.leadingAnchor constant:16],
+        [self.authModeControl.trailingAnchor constraintEqualToAnchor:self.formContainerView.trailingAnchor constant:-16],
+
         // Email Label
-        [self.emailLabel.topAnchor constraintEqualToAnchor:self.formContainerView.topAnchor constant:12],
+        [self.emailLabel.topAnchor constraintEqualToAnchor:self.authModeControl.bottomAnchor constant:12],
         [self.emailLabel.leadingAnchor constraintEqualToAnchor:self.formContainerView.leadingAnchor constant:16],
         
         // Email TextField
@@ -311,8 +328,7 @@
         [separator.trailingAnchor constraintEqualToAnchor:self.formContainerView.trailingAnchor],
         [separator.heightAnchor constraintEqualToConstant:0.5],
         
-        // API Key Label
-        [self.apiKeyLabel.topAnchor constraintEqualToAnchor:separator.bottomAnchor constant:12],
+        // API Key Label (top anchor is set by the active auth-mode constraint set)
         [self.apiKeyLabel.leadingAnchor constraintEqualToAnchor:self.formContainerView.leadingAnchor constant:16],
         
         // API Key TextField
@@ -374,6 +390,18 @@
         [self.activityIndicator.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [self.activityIndicator.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor]
     ]];
+
+    // When Global API Key is selected the email row is shown; when API Token is
+    // selected the API Key field sits directly under the selector and the email
+    // row is collapsed. Only the API Key label's top anchor swaps between sets.
+    self.emailVisibleConstraints = @[
+        [self.apiKeyLabel.topAnchor constraintEqualToAnchor:self.emailSeparator.bottomAnchor constant:12]
+    ];
+    self.emailHiddenConstraints = @[
+        [self.apiKeyLabel.topAnchor constraintEqualToAnchor:self.authModeControl.bottomAnchor constant:12]
+    ];
+
+    [self applyAuthMode];
 }
 
 - (void)loadSavedCredentials {
@@ -381,7 +409,12 @@
     CFAccount *account = [keychain getCurrentAccount];
     NSString *email = account.email;
     NSString *apiKey = account.apiKey;
-    
+
+    if (account) {
+        self.authModeControl.selectedSegmentIndex = [account usesAPIToken] ? 1 : 0;
+        [self applyAuthMode];
+    }
+
     if (email) {
         self.emailTextField.text = email;
     }
@@ -392,6 +425,42 @@
 
 #pragma mark - Actions
 
+- (UIColor *)secondaryTextColor {
+    if (@available(iOS 26.0, *)) {
+        return [UIColor secondaryLabelColor];
+    }
+    return [UIColor cf_secondaryTextColor];
+}
+
+- (void)authModeChanged {
+    [self applyAuthMode];
+    [UIView animateWithDuration:0.2 animations:^{
+        [self.view layoutIfNeeded];
+    }];
+}
+
+- (void)applyAuthMode {
+    BOOL usesToken = (self.authModeControl.selectedSegmentIndex == 1);
+
+    self.emailLabel.hidden = usesToken;
+    self.emailTextField.hidden = usesToken;
+    self.emailSeparator.hidden = usesToken;
+
+    if (usesToken) {
+        [NSLayoutConstraint deactivateConstraints:self.emailVisibleConstraints];
+        [NSLayoutConstraint activateConstraints:self.emailHiddenConstraints];
+        self.apiKeyLabel.text = @"API Token";
+        self.apiKeyTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your API Token" attributes:@{NSForegroundColorAttributeName: [self secondaryTextColor]}];
+        self.apiKeyHintLabel.text = @"Some features may be limited by the token's permissions. Grant Zone, DNS, Workers and KV access as needed.";
+    } else {
+        [NSLayoutConstraint deactivateConstraints:self.emailHiddenConstraints];
+        [NSLayoutConstraint activateConstraints:self.emailVisibleConstraints];
+        self.apiKeyLabel.text = @"Global API Key";
+        self.apiKeyTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your API Key" attributes:@{NSForegroundColorAttributeName: [self secondaryTextColor]}];
+        self.apiKeyHintLabel.text = @"Your Global API Key has full account access. Credentials stay on this device.";
+    }
+}
+
 - (void)pasteButtonTapped {
     UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
     if (pasteboard.string) {
@@ -400,12 +469,21 @@
 }
 
 - (void)loginButtonTapped {
+    CFAuthMode authMode = (self.authModeControl.selectedSegmentIndex == 1) ? CFAuthModeAPIToken : CFAuthModeGlobalKey;
     NSString *email = [self.emailTextField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     NSString *apiKey = [self.apiKeyTextField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    CFAuthMode authMode = email.length == 0 ? CFAuthModeAPIToken : CFAuthModeGlobalKey;
-    
+
     if (apiKey.length == 0) {
-        [self showAlertWithTitle:@"Error" message:@"Please enter an API Token or Global API Key."];
+        NSString *what = (authMode == CFAuthModeAPIToken) ? @"an API Token" : @"your Global API Key";
+        [self showAlertWithTitle:@"Error" message:[NSString stringWithFormat:@"Please enter %@.", what]];
+        return;
+    }
+
+    if (authMode == CFAuthModeAPIToken) {
+        // API Token auth does not use the email header.
+        email = @"";
+    } else if (email.length == 0) {
+        [self showAlertWithTitle:@"Error" message:@"Please enter the email for your Global API Key."];
         return;
     }
     
@@ -435,7 +513,7 @@
 
 - (void)helpButtonTapped {
     NSString *linkURL = @"https://dash.cloudflare.com/profile/api-tokens";
-    NSString *message = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with Zone, DNS, Workers and KV permissions as needed.\n\n3. Leave email empty when logging in with the token.", linkURL];
+    NSString *message = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with Zone, DNS, Workers and KV permissions as needed.\n\n3. Choose API Token above, then paste the token (no email required).", linkURL];
     
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"How to Get API Token"
                                                                    message:message
