@@ -20,12 +20,14 @@
 
 ## ✨ Features
 
+- **Multi-Account & API Tokens**: Manage multiple Cloudflare accounts and sign in with either a **Global API Key** or a scoped **API Token**.
 - **Zone Management**: View all your domains at a glance, check their status, and add new zones easily.
 - **DNS Record Editor**: Full CRUD (Create, Read, Update, Delete) support for DNS records including A, AAAA, CNAME, MX, TXT, and more.
 - **Real-time Analytics**: Monitor your website traffic, requests, and bandwidth usage with intuitive charts.
 - **Security Controls**: Toggle SSL/TLS modes, adjust Security Levels (e.g., "Under Attack" mode), and manage Development Mode.
-- **Cache Management**: Purge your Cloudflare cache with a single tap to ensure your users always see the latest content.
-- **Privacy First**: Sensitive API credentials (Email & API Key) are stored locally in the **iOS Keychain** and are never sent to any third-party server except Cloudflare.
+- **Cache & Performance**: Tune Brotli, Always Online, Cache Level, and Browser Cache TTL, and purge everything or specific URLs in a single tap.
+- **Workers & KV**: Browse your account's Worker scripts and KV namespaces, and manage per-domain Worker Routes.
+- **Privacy First**: Credentials (Email, API Key, or API Token) are stored locally in the **iOS Keychain** and are never sent to any third-party server except Cloudflare.
 
 ## 🚀 Getting Started
 
@@ -74,6 +76,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 3. Commit your Changes (`git commit -m 'feat: add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+### 💡 PRs We'd Love to See
+
+We especially welcome contributions that benefit most users — broadly useful, mainstream features such as:
+
+- 🌐 **Localization (i18n)** — translations so the app feels native in more languages.
+- 📲 **Home Screen Widgets** — at-a-glance traffic stats or one-tap shortcuts.
+- 🔍 **DNS Search & Filtering** — quickly find records in large zones.
+- 🔔 **Push Notifications** — alerts for traffic spikes or certificate/expiry changes.
+- 🗂️ **Bulk Import / Export** — import or export DNS records (e.g. BIND zone files).
+- ⌚ **Apple Ecosystem** — Siri Shortcuts / App Intents, plus iPad and Mac layout polish.
 
 ## 🙏 Acknowledgments
 

@@ -8,7 +8,7 @@
 #import "CFDomainDetailViewController.h"
 #import "CFDNSRecordsViewController.h"
 #import "CFTrafficAnalyticsViewController.h"
-#import "CFWorkersViewController.h"
+#import "CFWorkerRoutesViewController.h"
 #import "CFAPIService.h"
 #import "UIColor+FlareDNS.h"
 
@@ -361,8 +361,8 @@
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
     } else {
-        cell.textLabel.text = @"Workers & KV";
-        customImageView.image = [self iconWithName:@"bolt.horizontal.circle.fill"];
+        cell.textLabel.text = @"Worker Routes";
+        customImageView.image = [self iconWithName:@"point.3.connected.trianglepath.dotted"];
         customImageView.tintColor = [UIColor systemIndigoColor];
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
@@ -766,8 +766,8 @@
             CFTrafficAnalyticsViewController *analyticsVC = [[CFTrafficAnalyticsViewController alloc] initWithZone:self.zone];
             [self.navigationController pushViewController:analyticsVC animated:YES];
         } else {
-            CFWorkersViewController *workersVC = [[CFWorkersViewController alloc] initWithZone:self.zone];
-            [self.navigationController pushViewController:workersVC animated:YES];
+            CFWorkerRoutesViewController *routesVC = [[CFWorkerRoutesViewController alloc] initWithZone:self.zone];
+            [self.navigationController pushViewController:routesVC animated:YES];
         }
     } else if (indexPath.section == 4) {
         if (indexPath.row == 0) {

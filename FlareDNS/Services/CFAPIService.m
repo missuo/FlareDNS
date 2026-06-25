@@ -465,6 +465,29 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
     [self setZoneSetting:@"browser_cache_ttl" value:@(seconds) forZoneID:zoneID completion:completion];
 }
 
+#pragma mark - Accounts
+
+- (void)fetchAccountsWithCompletion:(void (^)(NSArray<NSDictionary *> * _Nullable, NSError * _Nullable))completion {
+    NSMutableURLRequest *request = [self requestWithPath:@"/accounts?per_page=50" method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+
+        NSMutableArray<NSDictionary *> *accounts = [NSMutableArray array];
+        for (NSDictionary *dict in ([result isKindOfClass:[NSArray class]] ? result : @[])) {
+            NSString *accountID = [dict isKindOfClass:[NSDictionary class]] ? dict[@"id"] : nil;
+            if (accountID.length > 0) {
+                NSString *name = [dict[@"name"] isKindOfClass:[NSString class]] ? dict[@"name"] : accountID;
+                [accounts addObject:@{@"id": accountID, @"name": name}];
+            }
+        }
+        completion(accounts, nil);
+    }];
+}
+
 #pragma mark - Workers
 
 - (void)fetchWorkerScriptsForAccountID:(NSString *)accountID completion:(void (^)(NSArray<CFWorkerScript *> * _Nullable, NSError * _Nullable))completion {

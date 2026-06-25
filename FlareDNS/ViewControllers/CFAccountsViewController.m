@@ -9,6 +9,8 @@
 #import "CFAccount.h"
 #import "CFKeychainService.h"
 #import "CFAPIService.h"
+#import "CFWorkerScriptsViewController.h"
+#import "CFKVNamespacesViewController.h"
 #import "UIColor+FlareDNS.h"
 
 static NSString *const kAccountCellIdentifier = @"AccountCell";
@@ -16,6 +18,7 @@ static NSString *const kActionCellIdentifier = @"ActionCell";
 
 typedef NS_ENUM(NSInteger, CFSettingsSection) {
     CFSettingsSectionAccounts = 0,
+    CFSettingsSectionResources,
     CFSettingsSectionActions,
     CFSettingsSectionHelp,
     CFSettingsSectionAbout,
@@ -344,6 +347,8 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
     switch (section) {
         case CFSettingsSectionAccounts:
             return self.accounts.count;
+        case CFSettingsSectionResources:
+            return 2; // Workers, KV
         case CFSettingsSectionActions:
             return 2; // Add Account, Logout All
         case CFSettingsSectionHelp:
@@ -393,6 +398,24 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
             cell.accessoryType = UITableViewCellAccessoryNone;
         }
         
+        return cell;
+    } else if (indexPath.section == CFSettingsSectionResources) {
+        UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"ResourceCell"];
+        cell.backgroundColor = cellBackground;
+        cell.textLabel.textColor = textColor;
+        cell.textLabel.font = [UIFont systemFontOfSize:17];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+
+        if (indexPath.row == 0) {
+            cell.textLabel.text = @"Workers";
+            cell.imageView.image = [UIImage systemImageNamed:@"bolt.fill"];
+            cell.imageView.tintColor = [UIColor systemOrangeColor];
+        } else {
+            cell.textLabel.text = @"KV";
+            cell.imageView.image = [UIImage systemImageNamed:@"shippingbox.fill"];
+            cell.imageView.tintColor = [UIColor systemPurpleColor];
+        }
+
         return cell;
     } else if (indexPath.section == CFSettingsSectionActions) {
         UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:kActionCellIdentifier forIndexPath:indexPath];
@@ -479,6 +502,8 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
     switch (section) {
         case CFSettingsSectionAccounts:
             return @"CLOUDFLARE ACCOUNTS";
+        case CFSettingsSectionResources:
+            return @"WORKERS & STORAGE";
         case CFSettingsSectionActions:
             return nil;
         case CFSettingsSectionHelp:
@@ -541,6 +566,11 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
     if (indexPath.section == CFSettingsSectionAccounts) {
         CFAccount *account = self.accounts[indexPath.row];
         [self switchToAccount:account];
+    } else if (indexPath.section == CFSettingsSectionResources) {
+        UIViewController *vc = (indexPath.row == 0)
+            ? (UIViewController *)[[CFWorkerScriptsViewController alloc] init]
+            : (UIViewController *)[[CFKVNamespacesViewController alloc] init];
+        [self.navigationController pushViewController:vc animated:YES];
     } else if (indexPath.section == CFSettingsSectionActions) {
         if (indexPath.row == 0) {
             [self addAccountTappedFromView:[tableView cellForRowAtIndexPath:indexPath]];

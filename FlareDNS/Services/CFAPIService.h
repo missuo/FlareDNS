@@ -59,6 +59,9 @@ typedef void (^CFAPICompletionBlock)(id _Nullable result, NSError * _Nullable er
 - (void)fetchBrowserCacheTTLForZoneID:(NSString *)zoneID completion:(void (^)(NSInteger seconds, NSError * _Nullable error))completion;
 - (void)setBrowserCacheTTL:(NSInteger)seconds forZoneID:(NSString *)zoneID completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 
+// Accounts
+- (void)fetchAccountsWithCompletion:(void (^)(NSArray<NSDictionary *> * _Nullable accounts, NSError * _Nullable error))completion;
+
 // Workers
 - (void)fetchWorkerScriptsForAccountID:(NSString *)accountID completion:(void (^)(NSArray<CFWorkerScript *> * _Nullable scripts, NSError * _Nullable error))completion;
 - (void)fetchWorkerRoutesForZoneID:(NSString *)zoneID completion:(void (^)(NSArray<CFWorkerRoute *> * _Nullable routes, NSError * _Nullable error))completion;
