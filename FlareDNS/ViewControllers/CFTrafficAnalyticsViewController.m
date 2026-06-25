@@ -303,6 +303,19 @@ typedef NS_ENUM(NSInteger, CFTimePeriod) {
     }];
 }
 
+// Format an integer count with the locale's grouping separator (e.g. 1,234,567).
+- (NSString *)formattedCount:(NSInteger)value {
+    static NSNumberFormatter *formatter = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        formatter = [[NSNumberFormatter alloc] init];
+        formatter.numberStyle = NSNumberFormatterDecimalStyle;
+        formatter.usesGroupingSeparator = YES;
+        formatter.maximumFractionDigits = 0;
+    });
+    return [formatter stringFromNumber:@(value)];
+}
+
 - (void)updateUI {
     // Check if there's no data available
     BOOL hasNoData = (self.trafficData.totalRequests == 0 && 
@@ -326,8 +339,8 @@ typedef NS_ENUM(NSInteger, CFTimePeriod) {
         return;
     }
     
-    self.visitorsValueLabel.text = [NSString stringWithFormat:@"%ld", (long)self.trafficData.uniqueVisitors];
-    self.requestsValueLabel.text = [NSString stringWithFormat:@"%ld", (long)self.trafficData.totalRequests];
+    self.visitorsValueLabel.text = [self formattedCount:self.trafficData.uniqueVisitors];
+    self.requestsValueLabel.text = [self formattedCount:self.trafficData.totalRequests];
     self.cachedValueLabel.text = [NSString stringWithFormat:@"%.1f%%", self.trafficData.cachedPercentage];
     self.dataServedValueLabel.text = [self.trafficData formattedDataServed];
     

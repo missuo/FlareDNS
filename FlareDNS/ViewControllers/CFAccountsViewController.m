@@ -176,76 +176,113 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
 
 #pragma mark - Actions
 
-- (void)addAccountTapped {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Add Account"
-                                                                   message:@"Enter an API Token, or email plus Global API Key"
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    
+- (void)addAccountTappedFromView:(nullable UIView *)sourceView {
+    // Step 1: choose the authentication method. The chosen method decides which
+    // fields the next step shows (API Token has no email field at all).
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Add Account"
+                                                                  message:@"Choose how to authenticate."
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+
+    [sheet addAction:[UIAlertAction actionWithTitle:@"API Token" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [self promptForCredentialsWithAuthMode:CFAuthModeAPIToken];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Global API Key" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [self promptForCredentialsWithAuthMode:CFAuthModeGlobalKey];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+
+    // Anchor the popover for iPad / regular-width presentations.
+    UIView *anchor = sourceView ?: self.view;
+    sheet.popoverPresentationController.sourceView = anchor;
+    sheet.popoverPresentationController.sourceRect = anchor.bounds;
+
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)promptForCredentialsWithAuthMode:(CFAuthMode)authMode {
+    BOOL usesToken = (authMode == CFAuthModeAPIToken);
+    NSString *message = usesToken
+        ? @"Paste your API Token. Some features may be limited by its permissions."
+        : @"Enter the email and Global API Key for your Cloudflare account.";
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:(usesToken ? @"API Token" : @"Global API Key")
+                                                                  message:message
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+
+    if (!usesToken) {
+        [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+            textField.placeholder = @"Email";
+            textField.keyboardType = UIKeyboardTypeEmailAddress;
+            textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+            textField.autocorrectionType = UITextAutocorrectionTypeNo;
+        }];
+    }
+
     [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"Email (optional for API Token)";
-        textField.keyboardType = UIKeyboardTypeEmailAddress;
-        textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        textField.autocorrectionType = UITextAutocorrectionTypeNo;
-    }];
-    
-    [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"API Token or Global API Key";
+        textField.placeholder = usesToken ? @"API Token" : @"Global API Key";
         textField.secureTextEntry = YES;
         textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
         textField.autocorrectionType = UITextAutocorrectionTypeNo;
     }];
-    
+
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Add" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-        UITextField *emailField = alert.textFields[0];
-        UITextField *apiKeyField = alert.textFields[1];
-        
-        NSString *email = [emailField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        NSString *apiKey = [apiKeyField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        
-        CFAuthMode authMode = email.length == 0 ? CFAuthModeAPIToken : CFAuthModeGlobalKey;
+        NSString *email = usesToken ? @"" : [alert.textFields[0].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        UITextField *keyField = usesToken ? alert.textFields[0] : alert.textFields[1];
+        NSString *apiKey = [keyField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
         if (apiKey.length == 0) {
-            [self showAlertWithTitle:@"Error" message:@"Please enter an API Token or Global API Key."];
+            [self showAlertWithTitle:@"Error" message:[NSString stringWithFormat:@"Please enter %@.", usesToken ? @"an API Token" : @"your Global API Key"]];
             return;
         }
-        
-        // Verify credentials by fetching zones
-        [self.activityIndicator startAnimating];
-        CFAPIService *apiService = [CFAPIService shared];
-        NSString *originalEmail = apiService.email;
-        NSString *originalAPIKey = apiService.apiKey;
-        BOOL originalUsesAPIToken = apiService.usesAPIToken;
-        
-        apiService.email = email;
-        apiService.apiKey = apiKey;
-        apiService.usesAPIToken = (authMode == CFAuthModeAPIToken);
-        
-        [[CFAPIService shared] fetchZonesWithCompletion:^(NSArray<CFZone *> * _Nullable zones, NSError * _Nullable error) {
-            [self.activityIndicator stopAnimating];
-            
-            if (error) {
-                apiService.email = originalEmail;
-                apiService.apiKey = originalAPIKey;
-                apiService.usesAPIToken = originalUsesAPIToken;
-                [self showAlertWithTitle:@"Error" message:@"Invalid credentials. Please check your API Token or Global API Key."];
-                return;
-            }
-            
-            // Create and save account
-            CFAccount *account = [[CFAccount alloc] initWithEmail:email apiKey:apiKey authMode:authMode];
-            if ([[CFKeychainService shared] addAccount:account]) {
-                // Set as current account if it's the first one
-                if (self.accounts.count == 0) {
-                    [[CFKeychainService shared] setCurrentAccount:account];
-                }
-                [self loadAccounts];
-            } else {
-                [self showAlertWithTitle:@"Error" message:@"Failed to save account."];
-            }
-        }];
+        if (!usesToken && email.length == 0) {
+            [self showAlertWithTitle:@"Error" message:@"Please enter the email for your Global API Key."];
+            return;
+        }
+
+        [self verifyAndAddAccountWithEmail:email apiKey:apiKey authMode:authMode];
     }]];
-    
+
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)verifyAndAddAccountWithEmail:(NSString *)email apiKey:(NSString *)apiKey authMode:(CFAuthMode)authMode {
+    // Verify credentials by fetching zones, restoring the active service
+    // configuration if verification fails.
+    [self.activityIndicator startAnimating];
+    CFAPIService *apiService = [CFAPIService shared];
+    NSString *originalEmail = apiService.email;
+    NSString *originalAPIKey = apiService.apiKey;
+    BOOL originalUsesAPIToken = apiService.usesAPIToken;
+
+    apiService.email = email;
+    apiService.apiKey = apiKey;
+    apiService.usesAPIToken = (authMode == CFAuthModeAPIToken);
+
+    [[CFAPIService shared] fetchZonesWithCompletion:^(NSArray<CFZone *> * _Nullable zones, NSError * _Nullable error) {
+        [self.activityIndicator stopAnimating];
+
+        if (error) {
+            apiService.email = originalEmail;
+            apiService.apiKey = originalAPIKey;
+            apiService.usesAPIToken = originalUsesAPIToken;
+            NSString *what = (authMode == CFAuthModeAPIToken) ? @"API Token" : @"email and Global API Key";
+            [self showAlertWithTitle:@"Error" message:[NSString stringWithFormat:@"Invalid credentials. Please check your %@.", what]];
+            return;
+        }
+
+        // Create and save account
+        CFAccount *account = [[CFAccount alloc] initWithEmail:email apiKey:apiKey authMode:authMode];
+        if ([[CFKeychainService shared] addAccount:account]) {
+            // Set as current account if it's the first one
+            if (self.accounts.count == 0) {
+                [[CFKeychainService shared] setCurrentAccount:account];
+            }
+            [self loadAccounts];
+        } else {
+            [self showAlertWithTitle:@"Error" message:@"Failed to save account."];
+        }
+    }];
 }
 
 - (void)switchToAccount:(CFAccount *)account {
@@ -404,7 +441,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         contentTextView.delegate = self;
         
         NSString *linkURL = @"https://dash.cloudflare.com/profile/api-tokens";
-        NSString *contentText = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with the permissions you need.\n\n3. For Global API Key, fill email and key. For API Token, leave email empty.", linkURL];
+        NSString *contentText = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with the permissions you need.\n\n3. When adding an account, choose API Token (no email needed) or Global API Key (email plus key).", linkURL];
         
         NSMutableAttributedString *attributedText = [[NSMutableAttributedString alloc] initWithString:contentText];
         NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
@@ -506,7 +543,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         [self switchToAccount:account];
     } else if (indexPath.section == CFSettingsSectionActions) {
         if (indexPath.row == 0) {
-            [self addAccountTapped];
+            [self addAccountTappedFromView:[tableView cellForRowAtIndexPath:indexPath]];
         } else {
             [self logoutAllAccounts];
         }
