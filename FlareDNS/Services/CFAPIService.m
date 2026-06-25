@@ -465,6 +465,122 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
     [self setZoneSetting:@"browser_cache_ttl" value:@(seconds) forZoneID:zoneID completion:completion];
 }
 
+#pragma mark - Workers
+
+- (void)fetchWorkerScriptsForAccountID:(NSString *)accountID completion:(void (^)(NSArray<CFWorkerScript *> * _Nullable, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/accounts/%@/workers/scripts-search?per_page=50", accountID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+
+        NSArray *items = nil;
+        if ([result isKindOfClass:[NSArray class]]) {
+            items = result;
+        } else if ([result isKindOfClass:[NSDictionary class]]) {
+            id candidate = result[@"items"] ?: result[@"scripts"];
+            if ([candidate isKindOfClass:[NSArray class]]) {
+                items = candidate;
+            }
+        }
+
+        NSMutableArray<CFWorkerScript *> *scripts = [NSMutableArray array];
+        for (NSDictionary *dict in items ?: @[]) {
+            if ([dict isKindOfClass:[NSDictionary class]]) {
+                [scripts addObject:[CFWorkerScript scriptFromDictionary:dict]];
+            }
+        }
+        completion(scripts, nil);
+    }];
+}
+
+- (void)fetchWorkerRoutesForZoneID:(NSString *)zoneID completion:(void (^)(NSArray<CFWorkerRoute *> * _Nullable, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/workers/routes", zoneID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+
+        NSMutableArray<CFWorkerRoute *> *routes = [NSMutableArray array];
+        for (NSDictionary *dict in ([result isKindOfClass:[NSArray class]] ? result : @[])) {
+            if ([dict isKindOfClass:[NSDictionary class]]) {
+                [routes addObject:[CFWorkerRoute routeFromDictionary:dict]];
+            }
+        }
+        completion(routes, nil);
+    }];
+}
+
+- (void)createWorkerRouteForZoneID:(NSString *)zoneID pattern:(NSString *)pattern scriptName:(NSString *)scriptName completion:(void (^)(CFWorkerRoute * _Nullable, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/workers/routes", zoneID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"POST"];
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:@{@"pattern": pattern, @"script": scriptName} options:0 error:nil];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+        completion([CFWorkerRoute routeFromDictionary:result], nil);
+    }];
+}
+
+- (void)deleteWorkerRouteWithID:(NSString *)routeID forZoneID:(NSString *)zoneID completion:(void (^)(BOOL, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/zones/%@/workers/routes/%@", zoneID, routeID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"DELETE"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        completion(error == nil, error);
+    }];
+}
+
+- (void)fetchKVNamespacesForAccountID:(NSString *)accountID completion:(void (^)(NSArray<CFKVNamespace *> * _Nullable, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/accounts/%@/storage/kv/namespaces?per_page=100", accountID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+
+        NSMutableArray<CFKVNamespace *> *namespaces = [NSMutableArray array];
+        for (NSDictionary *dict in ([result isKindOfClass:[NSArray class]] ? result : @[])) {
+            if ([dict isKindOfClass:[NSDictionary class]]) {
+                [namespaces addObject:[CFKVNamespace namespaceFromDictionary:dict]];
+            }
+        }
+        completion(namespaces, nil);
+    }];
+}
+
+- (void)fetchKVKeysForAccountID:(NSString *)accountID namespaceID:(NSString *)namespaceID completion:(void (^)(NSArray<NSString *> * _Nullable, NSError * _Nullable))completion {
+    NSString *path = [NSString stringWithFormat:@"/accounts/%@/storage/kv/namespaces/%@/keys?limit=100", accountID, namespaceID];
+    NSMutableURLRequest *request = [self requestWithPath:path method:@"GET"];
+
+    [self performRequest:request completion:^(id result, NSError *error) {
+        if (error) {
+            completion(nil, error);
+            return;
+        }
+
+        NSMutableArray<NSString *> *keys = [NSMutableArray array];
+        for (NSDictionary *dict in ([result isKindOfClass:[NSArray class]] ? result : @[])) {
+            NSString *name = [dict isKindOfClass:[NSDictionary class]] ? dict[@"name"] : nil;
+            if (name.length > 0) {
+                [keys addObject:name];
+            }
+        }
+        completion(keys, nil);
+    }];
+}
+
 #pragma mark - Analytics (GraphQL)
 
 - (void)fetchTrafficAnalyticsForZoneID:(NSString *)zoneID since:(NSDate *)since until:(NSDate *)until completion:(void (^)(CFTrafficData * _Nullable, NSError * _Nullable))completion {

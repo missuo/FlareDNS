@@ -8,6 +8,7 @@
 #import "CFDomainDetailViewController.h"
 #import "CFDNSRecordsViewController.h"
 #import "CFTrafficAnalyticsViewController.h"
+#import "CFWorkersViewController.h"
 #import "CFAPIService.h"
 #import "UIColor+FlareDNS.h"
 
@@ -224,7 +225,7 @@
     switch (section) {
         case 0: return 1; // Domain Information (Status)
         case 1: return 1; // Domain Registration
-        case 2: return 2; // Zone Details (DNS Records, Traffic Analytics)
+        case 2: return 3; // Zone Details (DNS Records, Traffic Analytics, Workers)
         case 3: return self.zone.nameServers.count; // Nameservers
         case 4: return 2; // Security (SSL Mode, Security Level)
         case 5: return 4; // Performance (Brotli, Always Online, Cache Level, Browser TTL)
@@ -353,10 +354,16 @@
         customImageView.tintColor = [UIColor systemBlueColor];
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
-    } else {
+    } else if (row == 1) {
         cell.textLabel.text = @"Traffic Analytics";
         customImageView.image = [self iconWithName:@"chart.bar.fill"];
         customImageView.tintColor = [UIColor systemGreenColor];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+    } else {
+        cell.textLabel.text = @"Workers & KV";
+        customImageView.image = [self iconWithName:@"bolt.horizontal.circle.fill"];
+        customImageView.tintColor = [UIColor systemIndigoColor];
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
         cell.selectionStyle = UITableViewCellSelectionStyleDefault;
     }
@@ -755,9 +762,12 @@
         if (indexPath.row == 0) {
             CFDNSRecordsViewController *dnsVC = [[CFDNSRecordsViewController alloc] initWithZone:self.zone];
             [self.navigationController pushViewController:dnsVC animated:YES];
-        } else {
+        } else if (indexPath.row == 1) {
             CFTrafficAnalyticsViewController *analyticsVC = [[CFTrafficAnalyticsViewController alloc] initWithZone:self.zone];
             [self.navigationController pushViewController:analyticsVC animated:YES];
+        } else {
+            CFWorkersViewController *workersVC = [[CFWorkersViewController alloc] initWithZone:self.zone];
+            [self.navigationController pushViewController:workersVC animated:YES];
         }
     } else if (indexPath.section == 4) {
         if (indexPath.row == 0) {
