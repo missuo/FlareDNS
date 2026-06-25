@@ -127,7 +127,7 @@
     // Email TextField
     self.emailTextField = [[UITextField alloc] init];
     self.emailTextField.translatesAutoresizingMaskIntoConstraints = NO;
-    self.emailTextField.placeholder = @"Enter your email";
+    self.emailTextField.placeholder = @"Required for Global API Key";
     self.emailTextField.font = [UIFont systemFontOfSize:17];
     self.emailTextField.textColor = primaryText;
     self.emailTextField.keyboardType = UIKeyboardTypeEmailAddress;
@@ -135,7 +135,7 @@
     self.emailTextField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.emailTextField.returnKeyType = UIReturnKeyNext;
     self.emailTextField.delegate = self;
-    self.emailTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your email" attributes:@{NSForegroundColorAttributeName: secondaryText}];
+    self.emailTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Required for Global API Key" attributes:@{NSForegroundColorAttributeName: secondaryText}];
     [self.formContainerView addSubview:self.emailTextField];
     
     // Separator
@@ -148,7 +148,7 @@
     // API Key Label
     self.apiKeyLabel = [[UILabel alloc] init];
     self.apiKeyLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.apiKeyLabel.text = @"API Key";
+    self.apiKeyLabel.text = @"API Token or Global API Key";
     self.apiKeyLabel.font = [UIFont systemFontOfSize:13];
     self.apiKeyLabel.textColor = secondaryText;
     [self.formContainerView addSubview:self.apiKeyLabel];
@@ -156,7 +156,7 @@
     // API Key TextField
     self.apiKeyTextField = [[UITextField alloc] init];
     self.apiKeyTextField.translatesAutoresizingMaskIntoConstraints = NO;
-    self.apiKeyTextField.placeholder = @"Enter your API Key";
+    self.apiKeyTextField.placeholder = @"Enter your API Token or API Key";
     self.apiKeyTextField.font = [UIFont systemFontOfSize:17];
     self.apiKeyTextField.textColor = primaryText;
     self.apiKeyTextField.secureTextEntry = YES;
@@ -164,7 +164,7 @@
     self.apiKeyTextField.autocorrectionType = UITextAutocorrectionTypeNo;
     self.apiKeyTextField.returnKeyType = UIReturnKeyDone;
     self.apiKeyTextField.delegate = self;
-    self.apiKeyTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your API Key" attributes:@{NSForegroundColorAttributeName: secondaryText}];
+    self.apiKeyTextField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:@"Enter your API Token or API Key" attributes:@{NSForegroundColorAttributeName: secondaryText}];
     [self.formContainerView addSubview:self.apiKeyTextField];
     
     // Paste Button
@@ -178,7 +178,7 @@
     // API Key Hint
     self.apiKeyHintLabel = [[UILabel alloc] init];
     self.apiKeyHintLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.apiKeyHintLabel.text = @"Your API Key is stored securely on this device.";
+    self.apiKeyHintLabel.text = @"Leave email empty when using an API Token. Credentials stay on this device.";
     self.apiKeyHintLabel.font = [UIFont systemFontOfSize:13];
     self.apiKeyHintLabel.textColor = secondaryText;
     [self.formContainerView addSubview:self.apiKeyHintLabel];
@@ -235,7 +235,7 @@
     helpIcon.image = [[UIImage systemImageNamed:@"questionmark.circle.fill"] imageWithTintColor:accentColor];
     helpIcon.bounds = CGRectMake(0, -3, 18, 18);
     [helpText appendAttributedString:[NSAttributedString attributedStringWithAttachment:helpIcon]];
-    [helpText appendAttributedString:[[NSAttributedString alloc] initWithString:@"  How to Get API Key" attributes:@{NSForegroundColorAttributeName: accentColor, NSFontAttributeName: [UIFont systemFontOfSize:17]}]];
+    [helpText appendAttributedString:[[NSAttributedString alloc] initWithString:@"  How to Get API Token" attributes:@{NSForegroundColorAttributeName: accentColor, NSFontAttributeName: [UIFont systemFontOfSize:17]}]];
     
     [self.helpButton setAttributedTitle:helpText forState:UIControlStateNormal];
     self.helpButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
@@ -378,8 +378,9 @@
 
 - (void)loadSavedCredentials {
     CFKeychainService *keychain = [CFKeychainService shared];
-    NSString *email = [keychain getEmail];
-    NSString *apiKey = [keychain getAPIKey];
+    CFAccount *account = [keychain getCurrentAccount];
+    NSString *email = account.email;
+    NSString *apiKey = account.apiKey;
     
     if (email) {
         self.emailTextField.text = email;
@@ -399,11 +400,12 @@
 }
 
 - (void)loginButtonTapped {
-    NSString *email = self.emailTextField.text;
-    NSString *apiKey = self.apiKeyTextField.text;
+    NSString *email = [self.emailTextField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSString *apiKey = [self.apiKeyTextField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    CFAuthMode authMode = email.length == 0 ? CFAuthModeAPIToken : CFAuthModeGlobalKey;
     
-    if (email.length == 0 || apiKey.length == 0) {
-        [self showAlertWithTitle:@"Error" message:@"Please enter both email and API key."];
+    if (apiKey.length == 0) {
+        [self showAlertWithTitle:@"Error" message:@"Please enter an API Token or Global API Key."];
         return;
     }
     
@@ -413,13 +415,17 @@
     CFAPIService *api = [CFAPIService shared];
     api.email = email;
     api.apiKey = apiKey;
+    api.usesAPIToken = (authMode == CFAuthModeAPIToken);
     
     [api verifyCredentialsWithCompletion:^(BOOL success, NSError * _Nullable error) {
         [self.activityIndicator stopAnimating];
         self.view.userInteractionEnabled = YES;
         
         if (success) {
-            [[CFKeychainService shared] saveEmail:email apiKey:apiKey];
+            CFAccount *account = [[CFAccount alloc] initWithEmail:email apiKey:apiKey authMode:authMode];
+            [[CFKeychainService shared] addAccount:account];
+            [[CFKeychainService shared] setCurrentAccount:account];
+            [[CFAPIService shared] configureWithAccount:account];
             [self.delegate loginViewControllerDidLogin:self];
         } else {
             [self showAlertWithTitle:@"Login Failed" message:error.localizedDescription ?: @"Invalid credentials."];
@@ -429,9 +435,9 @@
 
 - (void)helpButtonTapped {
     NSString *linkURL = @"https://dash.cloudflare.com/profile/api-tokens";
-    NSString *message = [NSString stringWithFormat:@"1. Open %@\n\n2. Navigate to:\n   API Keys > Global API Key > View", linkURL];
+    NSString *message = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with Zone, DNS, Workers and KV permissions as needed.\n\n3. Leave email empty when logging in with the token.", linkURL];
     
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"How to Get API Key"
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"How to Get API Token"
                                                                    message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];
     

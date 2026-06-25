@@ -89,7 +89,7 @@ static NSString *const kCurrentAccountKey = @"cloudflare_current_account";
     }
     
     NSError *error;
-    NSSet *allowedClasses = [NSSet setWithObjects:[NSArray class], [CFAccount class], nil];
+    NSSet *allowedClasses = [NSSet setWithObjects:[NSArray class], [NSMutableArray class], [CFAccount class], [NSString class], nil];
     NSArray *accounts = [NSKeyedUnarchiver unarchivedObjectOfClasses:allowedClasses fromData:data error:&error];
     
     if (error) {

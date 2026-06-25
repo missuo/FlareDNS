@@ -31,8 +31,10 @@
     if ([keychain hasStoredCredentials]) {
         // Set up API service with stored credentials
         CFAPIService *api = [CFAPIService shared];
-        api.email = [keychain getEmail];
-        api.apiKey = [keychain getAPIKey];
+        CFAccount *account = [keychain getCurrentAccount];
+        if (account) {
+            [api configureWithAccount:account];
+        }
         
         // Show domains list
         [self showDomainsListAnimated:NO];

@@ -178,18 +178,18 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
 
 - (void)addAccountTapped {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Add Account"
-                                                                   message:@"Enter your Cloudflare email and API Key"
+                                                                   message:@"Enter an API Token, or email plus Global API Key"
                                                             preferredStyle:UIAlertControllerStyleAlert];
     
     [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"Email";
+        textField.placeholder = @"Email (optional for API Token)";
         textField.keyboardType = UIKeyboardTypeEmailAddress;
         textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
         textField.autocorrectionType = UITextAutocorrectionTypeNo;
     }];
     
     [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"API Key";
+        textField.placeholder = @"API Token or Global API Key";
         textField.secureTextEntry = YES;
         textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
         textField.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -203,8 +203,9 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         NSString *email = [emailField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         NSString *apiKey = [apiKeyField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         
-        if (email.length == 0 || apiKey.length == 0) {
-            [self showAlertWithTitle:@"Error" message:@"Please fill in all fields."];
+        CFAuthMode authMode = email.length == 0 ? CFAuthModeAPIToken : CFAuthModeGlobalKey;
+        if (apiKey.length == 0) {
+            [self showAlertWithTitle:@"Error" message:@"Please enter an API Token or Global API Key."];
             return;
         }
         
@@ -213,9 +214,11 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         CFAPIService *apiService = [CFAPIService shared];
         NSString *originalEmail = apiService.email;
         NSString *originalAPIKey = apiService.apiKey;
+        BOOL originalUsesAPIToken = apiService.usesAPIToken;
         
         apiService.email = email;
         apiService.apiKey = apiKey;
+        apiService.usesAPIToken = (authMode == CFAuthModeAPIToken);
         
         [[CFAPIService shared] fetchZonesWithCompletion:^(NSArray<CFZone *> * _Nullable zones, NSError * _Nullable error) {
             [self.activityIndicator stopAnimating];
@@ -223,12 +226,13 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
             if (error) {
                 apiService.email = originalEmail;
                 apiService.apiKey = originalAPIKey;
-                [self showAlertWithTitle:@"Error" message:@"Invalid credentials. Please check your email and API key."];
+                apiService.usesAPIToken = originalUsesAPIToken;
+                [self showAlertWithTitle:@"Error" message:@"Invalid credentials. Please check your API Token or Global API Key."];
                 return;
             }
             
             // Create and save account
-            CFAccount *account = [[CFAccount alloc] initWithEmail:email apiKey:apiKey];
+            CFAccount *account = [[CFAccount alloc] initWithEmail:email apiKey:apiKey authMode:authMode];
             if ([[CFKeychainService shared] addAccount:account]) {
                 // Set as current account if it's the first one
                 if (self.accounts.count == 0) {
@@ -248,8 +252,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
     [[CFKeychainService shared] setCurrentAccount:account];
     
     CFAPIService *apiService = [CFAPIService shared];
-    apiService.email = account.email;
-    apiService.apiKey = account.apiKey;
+    [apiService configureWithAccount:account];
     
     if ([self.delegate respondsToSelector:@selector(accountsViewControllerDidSwitchAccount:)]) {
         [self.delegate accountsViewControllerDidSwitchAccount:self];
@@ -341,7 +344,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         BOOL isCurrentAccount = [account.identifier isEqualToString:currentAccount.identifier];
         
         cell.backgroundColor = cellBackground;
-        cell.textLabel.text = account.email;
+        cell.textLabel.text = [account usesAPIToken] ? (account.displayName ?: @"API Token") : account.email;
         cell.textLabel.textColor = textColor;
         cell.textLabel.font = [UIFont systemFontOfSize:17];
         cell.imageView.image = nil;
@@ -401,7 +404,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         contentTextView.delegate = self;
         
         NSString *linkURL = @"https://dash.cloudflare.com/profile/api-tokens";
-        NSString *contentText = [NSString stringWithFormat:@"1. Open %@\n\n2. Navigate to:\n   API Keys > Global API Key > View", linkURL];
+        NSString *contentText = [NSString stringWithFormat:@"1. Open %@\n\n2. Create an API Token with the permissions you need.\n\n3. For Global API Key, fill email and key. For API Token, leave email empty.", linkURL];
         
         NSMutableAttributedString *attributedText = [[NSMutableAttributedString alloc] initWithString:contentText];
         NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
@@ -442,7 +445,7 @@ typedef NS_ENUM(NSInteger, CFSettingsSection) {
         case CFSettingsSectionActions:
             return nil;
         case CFSettingsSectionHelp:
-            return @"How to Get API Key";
+            return @"How to Get API Token";
         default:
             return nil;
     }

@@ -43,8 +43,12 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
     request.HTTPMethod = method;
     
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    [request setValue:self.email forHTTPHeaderField:@"X-Auth-Email"];
-    [request setValue:self.apiKey forHTTPHeaderField:@"X-Auth-Key"];
+    if (self.usesAPIToken) {
+        [request setValue:[NSString stringWithFormat:@"Bearer %@", self.apiKey ?: @""] forHTTPHeaderField:@"Authorization"];
+    } else {
+        [request setValue:self.email forHTTPHeaderField:@"X-Auth-Email"];
+        [request setValue:self.apiKey forHTTPHeaderField:@"X-Auth-Key"];
+    }
     
     return request;
 }
@@ -119,11 +123,14 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
 
 #pragma mark - Authentication
 
+- (void)configureWithAccount:(CFAccount *)account {
+    self.email = account.email;
+    self.apiKey = account.apiKey;
+    self.usesAPIToken = [account usesAPIToken];
+}
+
 - (void)verifyCredentialsWithCompletion:(void (^)(BOOL, NSError * _Nullable))completion {
-    NSMutableURLRequest *request = [self requestWithPath:@"/user/tokens/verify" method:@"GET"];
-    
-    // For API Key auth, we use a different endpoint
-    request = [self requestWithPath:@"/zones?per_page=1" method:@"GET"];
+    NSMutableURLRequest *request = [self requestWithPath:@"/zones?per_page=1" method:@"GET"];
     
     [self performRequest:request completion:^(id result, NSError *error) {
         if (error) {
@@ -482,8 +489,12 @@ static NSString *const kBaseURL = @"https://api.cloudflare.com/client/v4";
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.HTTPMethod = @"POST";
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    [request setValue:self.email forHTTPHeaderField:@"X-Auth-Email"];
-    [request setValue:self.apiKey forHTTPHeaderField:@"X-Auth-Key"];
+    if (self.usesAPIToken) {
+        [request setValue:[NSString stringWithFormat:@"Bearer %@", self.apiKey ?: @""] forHTTPHeaderField:@"Authorization"];
+    } else {
+        [request setValue:self.email forHTTPHeaderField:@"X-Auth-Email"];
+        [request setValue:self.apiKey forHTTPHeaderField:@"X-Auth-Key"];
+    }
     
     NSError *jsonError;
     request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:&jsonError];

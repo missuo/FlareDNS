@@ -370,6 +370,7 @@ static NSString *const kDomainCellIdentifier = @"DomainCell";
 - (void)accountsViewControllerDidLogout:(CFAccountsViewController *)controller {
   [CFAPIService shared].email = nil;
   [CFAPIService shared].apiKey = nil;
+  [CFAPIService shared].usesAPIToken = NO;
   [self.delegate domainsListViewControllerDidLogout:self];
 }
 

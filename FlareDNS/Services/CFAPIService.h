@@ -9,6 +9,7 @@
 #import "CFZone.h"
 #import "CFDNSRecord.h"
 #import "CFTrafficData.h"
+#import "CFAccount.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -18,10 +19,12 @@ typedef void (^CFAPICompletionBlock)(id _Nullable result, NSError * _Nullable er
 
 @property (nonatomic, copy, nullable) NSString *email;
 @property (nonatomic, copy, nullable) NSString *apiKey;
+@property (nonatomic, assign) BOOL usesAPIToken;
 
 + (instancetype)shared;
 
 // Authentication
+- (void)configureWithAccount:(CFAccount *)account;
 - (void)verifyCredentialsWithCompletion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 
 // Zones
